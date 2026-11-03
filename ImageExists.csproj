@@ -61,6 +61,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="matcher.py" />
+    <Content Include="Template.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

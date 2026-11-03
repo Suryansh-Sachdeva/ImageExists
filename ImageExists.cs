@@ -28,11 +28,7 @@ namespace ImageExists
             {
                 Result = false;
 
-                // 1. Validate the template image.
-
-                EnsureFileExists(TemplatePath, "Template image");
-
-                // 2. Locate the required files.
+                // 1. Locate the required files.
 
                 string projectDirectory =
                     AppDomain.CurrentDomain.BaseDirectory;
@@ -47,24 +43,20 @@ namespace ImageExists
                     "matcher.py"
                 );
 
-                EnsureFileExists(
-                    screenshotExecutable,
-                    "Screenshot.exe"
-                );
+                // 2. Validate the required files.
 
-                EnsureFileExists(
-                    matcherPath,
-                    "matcher.py"
-                );
+                EnsureFileExists(TemplatePath, "Template image");
+                EnsureFileExists(screenshotExecutable, "Screenshot.exe");
+                EnsureFileExists(matcherPath, "matcher.py");
 
-                // Use a unique filename for each screenshot.
+                // 3. Generate a unique screenshot filename.
 
                 screenshotPath = Path.Combine(
-                    projectDirectory,
+                    Path.GetTempPath(),
                     "screenshot_" + Guid.NewGuid().ToString("N") + ".png"
                 );
 
-                // 3. Capture the screenshot.
+                // 4. Capture the current screen.
 
                 ProcessStartInfo screenshotInfo =
                     new ProcessStartInfo
@@ -93,7 +85,7 @@ namespace ImageExists
                     "Captured screenshot"
                 );
 
-                // 4. Run Python image matching.
+                // 5. Run Python image matching.
 
                 ProcessStartInfo matcherInfo =
                     new ProcessStartInfo
@@ -121,7 +113,7 @@ namespace ImageExists
                     );
                 }
 
-                // 5. Read Python's result.
+                // 6. Read Python's result.
 
                 string output = matcherResult.Output.Trim();
 
@@ -153,7 +145,7 @@ namespace ImageExists
             }
             finally
             {
-                // 6. Always attempt screenshot cleanup.
+                // 7. Always attempt screenshot cleanup.
 
                 if (screenshotPath != null)
                 {
@@ -250,8 +242,10 @@ namespace ImageExists
                     {
                         // Process may already have exited.
                     }
-
-                    await waitTask;
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        // Process could not be terminated.
+                    }
 
                     throw new TimeoutException(
                         "Process timed out: " +
@@ -275,7 +269,7 @@ namespace ImageExists
             }
         }
 
-        // Quotes command-line arguments safely.
+        // Quotes command-line arguments.
 
         private static string QuoteArgument(string argument)
         {
