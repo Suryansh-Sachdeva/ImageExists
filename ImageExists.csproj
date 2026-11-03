@@ -63,5 +63,12 @@
     <Content Include="matcher.py" />
     <Content Include="Template.png" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include=".Dependencies\" />
+    <Folder Include="ImageExists.Activity\" />
+    <Folder Include="ImageExists.TestRunner\" />
+    <Folder Include="Python\" />
+    <Folder Include="Screenshot\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
