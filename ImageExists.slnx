@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="ImageExists.csproj" Id="870550ec-8854-4940-b984-6c99f8defa7d" />
+  <Project Path="ScreenshotTool/ScreenshotTool.csproj" Id="a5d96dc7-1052-4853-83c2-f00f4f8625eb" />
 </Solution>
