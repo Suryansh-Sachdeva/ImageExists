@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Runtime.InteropServices;
 using DrawingImage = System.Drawing.Image;
 
@@ -62,6 +63,14 @@ namespace ScreenshotTool
 
             string outputPath = args[0];
 
+            string outputDirectory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+
+            if (!Directory.Exists(outputDirectory))
+            {
+                Console.Error.WriteLine("Output directory does not exist.");
+                return 1;
+            }
+
             IntPtr desktopWindow = GetDesktopWindow();
             IntPtr sourceDC = IntPtr.Zero;
             IntPtr memoryDC = IntPtr.Zero;
@@ -111,7 +120,7 @@ namespace ScreenshotTool
 
                 oldBitmap = SelectObject(memoryDC, bitmap);
 
-                if (oldBitmap == IntPtr.Zero)
+                if (oldBitmap == IntPtr.Zero || oldBitmap == new IntPtr(-1))
                 {
                     throw new Exception("Could not select screenshot bitmap.");
                 }
