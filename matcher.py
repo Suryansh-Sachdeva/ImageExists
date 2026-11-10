@@ -1,5 +1,4 @@
-﻿
-import sys
+﻿import sys
 import cv2
 import numpy as np
 
@@ -26,21 +25,13 @@ def read_image(image_path):
     except Exception as error:
         print(
             f"Could not read image: {error}",
-            file=sys.stderr
+            file=sys.stderr,
+            flush=True
         )
         return None
 
 
-def main():
-    if len(sys.argv) != 3:
-        print(
-            "Usage: matcher.py <screenshot> <template>",
-            file=sys.stderr
-        )
-        sys.exit(1)
-
-    screenshot_path = sys.argv[1]
-    template_path = sys.argv[2]
+def match_images(screenshot_path, template_path):
 
     # 1. Read both images in grayscale.
 
@@ -48,18 +39,10 @@ def main():
     template = read_image(template_path)
 
     if screenshot is None:
-        print(
-            "Could not read screenshot.",
-            file=sys.stderr
-        )
-        sys.exit(1)
+        raise ValueError("Could not read screenshot.")
 
     if template is None:
-        print(
-            "Could not read template image.",
-            file=sys.stderr
-        )
-        sys.exit(1)
+        raise ValueError("Could not read template image.")
 
     # 2. Check image dimensions.
 
@@ -68,8 +51,7 @@ def main():
 
     if (template_width > screenshot_width or
             template_height > screenshot_height):
-        print("false")
-        return
+        return False
 
     # 3. Perform template matching.
 
@@ -87,10 +69,55 @@ def main():
 
     threshold = 0.80
 
-    if max_val >= threshold:
-        print("true")
-    else:
-        print("false")
+    return max_val >= threshold
+
+
+def main():
+
+    print("Python matcher ready.", file=sys.stderr, flush=True)
+
+    # Keep waiting for requests from C#.
+
+    while True:
+
+        # Read the screenshot path.
+
+        screenshot_path = sys.stdin.readline()
+
+        if not screenshot_path:
+            break
+
+        screenshot_path = screenshot_path.rstrip("\r\n")
+
+        # Read the template path.
+
+        template_path = sys.stdin.readline()
+
+        if not template_path:
+            break
+
+        template_path = template_path.rstrip("\r\n")
+
+        try:
+            found = match_images(
+                screenshot_path,
+                template_path
+            )
+
+            if found:
+                print("true", flush=True)
+            else:
+                print("false", flush=True)
+
+        except Exception as error:
+
+            print(
+                f"Matching error: {error}",
+                file=sys.stderr,
+                flush=True
+            )
+
+            print("ERROR", flush=True)
 
 
 if __name__ == "__main__":

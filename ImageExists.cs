@@ -8,6 +8,15 @@ namespace ImageExists
 {
     public class ImageExists
     {
+        // Register cleanup when the application shuts down.
+
+        static ImageExists()
+        {
+            AppDomain.CurrentDomain.ProcessExit += (sender, args) =>
+            {
+                StopMatcher();
+            };
+        }
         public string TemplatePath { get; set; }
 
         public bool Result { get; private set; }
@@ -17,6 +26,13 @@ namespace ImageExists
         // Prevent multiple executions from interfering with each other.
         private static readonly SemaphoreSlim ExecutionLock =
             new SemaphoreSlim(1, 1);
+
+        // Persistent Python matcher process.
+        private static Process matcherProcess;
+
+        private static StreamWriter matcherInput;
+
+        private static StreamReader matcherOutput;
 
         public async Task ExecuteAsync()
         {
@@ -35,7 +51,7 @@ namespace ImageExists
 
                 string screenshotExecutable = Path.Combine(
                     projectDirectory,
-                    "Screenshot.exe"
+                    "ScreenshotTool.exe"
                 );
 
                 string matcherPath = Path.Combine(
@@ -48,6 +64,7 @@ namespace ImageExists
                 EnsureFileExists(TemplatePath, "Template image");
                 EnsureFileExists(screenshotExecutable, "Screenshot.exe");
                 EnsureFileExists(matcherPath, "matcher.py");
+                EnsureMatcherRunning(matcherPath);
 
                 // 3. Generate a unique screenshot filename.
 
@@ -85,42 +102,40 @@ namespace ImageExists
                     "Captured screenshot"
                 );
 
-                // 5. Run Python image matching.
+                // 5. Send the matching request to the persistent Python process.
 
-                ProcessStartInfo matcherInfo =
-                    new ProcessStartInfo
-                    {
-                        FileName = "python",
-                        Arguments =
-                            QuoteArgument(matcherPath) + " " +
-                            QuoteArgument(screenshotPath) + " " +
-                            QuoteArgument(TemplatePath),
-
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true
-                    };
-
-                ProcessResult matcherResult =
-                    await RunProcessAsync(matcherInfo);
-
-                if (matcherResult.ExitCode != 0)
-                {
-                    throw new Exception(
-                        "Python matcher failed: " +
-                        matcherResult.Error
-                    );
-                }
+                await matcherInput.WriteLineAsync(screenshotPath);
+                await matcherInput.WriteLineAsync(TemplatePath);
+                await matcherInput.FlushAsync();
 
                 // 6. Read Python's result.
 
-                string output = matcherResult.Output.Trim();
+                Task<string> responseTask = matcherOutput.ReadLineAsync();
 
-                if (string.IsNullOrWhiteSpace(output))
+                Task timeoutTask = Task.Delay(
+                    ProcessTimeoutMilliseconds
+                );
+
+                Task completedTask = await Task.WhenAny(
+                    responseTask,
+                    timeoutTask
+                );
+
+                if (completedTask != responseTask)
+                {
+                    StopMatcher();
+
+                    throw new TimeoutException(
+                        "Python matcher did not respond in time."
+                    );
+                }
+
+                string output = await responseTask;
+
+                if (output == null)
                 {
                     throw new Exception(
-                        "Python matcher returned no result."
+                        "Python matcher stopped unexpectedly."
                     );
                 }
 
@@ -167,6 +182,116 @@ namespace ImageExists
                 }
 
                 ExecutionLock.Release();
+            }
+        }
+
+        // Starts the persistent Python matcher process.
+
+        private static void StartMatcher(string matcherPath)
+        {
+            ProcessStartInfo matcherInfo = new ProcessStartInfo
+            {
+                FileName = Path.Combine(
+                    Environment.GetFolderPath(
+                        Environment.SpecialFolder.LocalApplicationData
+                    ),
+                    @"Programs\Python\Python314\python.exe"
+                ),
+                Arguments = QuoteArgument(matcherPath),
+                UseShellExecute = false,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            matcherProcess = new Process();
+            matcherProcess.StartInfo = matcherInfo;
+
+            if (!matcherProcess.Start())
+            {
+                matcherProcess.Dispose();
+                matcherProcess = null;
+
+                throw new Exception("Could not start Python matcher.");
+            }
+
+            matcherInput = matcherProcess.StandardInput;
+            matcherOutput = matcherProcess.StandardOutput;
+
+            // Keep a local reference to this process.
+            Process process = matcherProcess;
+
+            // Continuously drain Python's error output.
+            Task.Run(async () =>
+            {
+                try
+                {
+                    while (await process.StandardError.ReadLineAsync() != null)
+                    {
+                        // Error output is consumed to prevent the pipe from filling.
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Process streams have been closed.
+                }
+            });
+        }
+
+        // Ensures that the Python matcher is running.
+
+        private static void EnsureMatcherRunning(string matcherPath)
+        {
+            if (matcherProcess != null)
+            {
+                if (!matcherProcess.HasExited)
+                {
+                    return;
+                }
+
+                matcherProcess.Dispose();
+
+                matcherProcess = null;
+                matcherInput = null;
+                matcherOutput = null;
+            }
+
+            StartMatcher(matcherPath);
+        }
+
+        // Stops the persistent Python matcher process.
+
+        private static void StopMatcher()
+        {
+            if (matcherProcess == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!matcherProcess.HasExited)
+                {
+                    matcherProcess.Kill();
+                    matcherProcess.WaitForExit();
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Process may already have exited.
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Process could not be terminated.
+            }
+            finally
+            {
+                matcherProcess.Dispose();
+
+                matcherProcess = null;
+                matcherInput = null;
+                matcherOutput = null;
             }
         }
 
