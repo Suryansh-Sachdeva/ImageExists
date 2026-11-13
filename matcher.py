@@ -1,6 +1,18 @@
 ﻿import sys
-import cv2
-import numpy as np
+
+try:
+    import cv2
+    import numpy as np
+
+except (ImportError, OSError) as error:
+    print(
+        "DEPENDENCY_ERROR: A required Python package is missing or could not be loaded: "
+        + str(error)
+        + ". Install the required packages using: py -3 -m pip install opencv-python numpy",
+        flush=True
+    )
+
+    sys.exit(1)
 
 
 def read_image(image_path):
@@ -74,6 +86,7 @@ def match_images(screenshot_path, template_path):
 
 def main():
 
+    print("READY", flush=True)
     print("Python matcher ready.", file=sys.stderr, flush=True)
 
     # Keep waiting for requests from C#.
